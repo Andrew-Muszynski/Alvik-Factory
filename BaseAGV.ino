@@ -1,11 +1,9 @@
 /*
-  BaseAGV_v2.ino - Arduino Alvik Factory AGV (Multi-Robot Queue System)
+  BaseAGV.ino - Arduino Alvik Factory AGV 
 
   UPDATED:
-  - Removed color calibration entirely (works out of the box)
   - BLUE sticker is the START/ORIGIN node (A), x,y = 0,0
   - RED stickers are route markers (count 1 => D, count 2 => E)
-  - QUEUE MANAGEMENT: Supports positions A, B, C with automatic advancement
   - Robust waypoint detection with HSV confidence gating
   - Startup lockout until BLUE confirmation
 */
@@ -28,7 +26,7 @@ typedef enum {
   STATE_MOVING,
   STATE_ARRIVED,
   STATE_RETURNING,
-  STATE_ADVANCING      // NEW: Moving within queue (B→A or C→B)
+  STATE_ADVANCING      
 } RobotState;
 
 typedef enum {
@@ -47,10 +45,10 @@ typedef enum {
 } WaypointColor;
 
 // =================== WiFi & Agent ===================
-char WIFI_SSID[]     = "ISECapstone";
-char WIFI_PASSWORD[] = "j0shf1sh";
-char AGENT_IP[]      = "192.168.0.115";
-uint32_t AGENT_PORT  = 8888;
+char WIFI_SSID[]     = "ISECapstone";                   // Replace with your WiFi username
+char WIFI_PASSWORD[] = "j0shf1sh";                      // Replace with your WiFi password
+char AGENT_IP[]      = "192.168.0.0";                 // Replace with your the IP address of the ROS2 Desktop
+uint32_t AGENT_PORT  = 8888;                            // Change if your port 8888 was busy and the agent cannot host with it
 
 // =================== Robot Configuration ============
 char ROBOT_NAME[16] = "Alvik1";
