@@ -1,43 +1,120 @@
 # Alvik-Factory
-Using Arduino Alvik robots, coordinates routing deliveries and pickups with line following.
 
-This currently works for a single Arduino Alvik robot to drive on a line of black duct tape. The start position is fixed on a blue sticker placed on the tape along with two red stickers placed at the drop off locations. The robot will remain on the duct tape line and stop when it gets to the correct position. 
+Using Arduino Alvik robots to coordinate routing deliveries and pickups with line following.
 
-The Supervisory.py allows the user to check the status of the connected Alvik(s) and send commands via ROS2. The FactoryAGV.py responds to the commands via ROS2 topics.
-For example,
-# Supervisory sends this:
+## Overview
+
+This system drives a single Arduino Alvik robot along a track made of black duct tape. A **blue sticker** marks the fixed starting position, and **two red stickers** mark the drop-off locations (D and E). The robot follows the tape and stops at the correct destination.
+
+Communication is handled over ROS2:
+- **Supervisory.py** — User-facing node that checks Alvik status and sends commands.
+- **FactoryAGV.py** — Receives commands from the supervisor and relays them to the robot.
+- **BaseAGV.ino** — Runs on the Alvik; handles movement, line following, and start/stop logic.
+
+**Example message exchange:**
+```
+# Supervisory sends:
 {"command": "request_service", "destination": "D"}
 
-# FactoryAGV responds with this:
+# FactoryAGV responds:
 {"response": "service_assigned", "agv_name": "Alvik1", ...}
+```
 
-The BaseAGV.ino runs on the Alvik containing the movement and logic to stay on the line, start/stop moving when given the command to do so or when certain conditions are met. 
+---
 
-Requirements:
-ROS2 Jazzy
-Python 3
-Arduino Alvik with micro-ROS
+## Requirements
 
-Before flashing BaseAGV.ino code to the robot, you must replace lines 48-50 to your WiFi network name, WiFi password and your computer's IP address.
-Then upload BaseAGV.ino to the Arduino Alvik's ESP32 with Arduino IDE.
+- ROS2 Jazzy
+- Python 3
+- Arduino Alvik with micro-ROS
+- Docker (for the micro-ROS agent)
 
-To bridge the communication between the micro-ROS and ROS2, use the microros agent with Docker. In a new terminal on the ROS2 Jazzy desktop/laptop ensure that you can start and host the agent which is able to translate the commands to one device to the other. 
-1) sudo apt update && sudo apt install -y docker.io
-2) sudo systemctl start docker
-3) sudo systemctl enable docker
-4) sudo usermod -aG docker $USER
-5) newgrp docker
-6) docker –version
-7) docker run -it --rm --net=host microros/micro-ros-agent:jazzy udp4 --port 8888 -v 6
+---
 
-Once the agent is running on the computer, turn the Alvik on and wait to see that it connects to the agent. In the terminal, new packets from the Alvik should be arriving frequently if the WiFi and IP are correct.
+## Setup
 
-In a new terminal, change the directory to one that you will keep the FactoryAGV.py and Supervisory.py and then source ROS2 using:
+### Step 1: Flash the Arduino Alvik
+
+1. Open `BaseAGV.ino` in the Arduino IDE.
+2. Replace **lines 48–50** with your WiFi network name, WiFi password, and your computer's IP address.
+3. Upload `BaseAGV.ino` to the Alvik's ESP32.
+
+### Step 2: Install and Run the micro-ROS Agent
+
+The micro-ROS agent bridges communication between the Alvik (micro-ROS) and your desktop (ROS2). It runs in Docker.
+
+> **If you already have Docker and micro-ROS installed, skip to step 2e.**
+
+In a new terminal:
+
+**a)** Install Docker:
+```bash
+sudo apt update && sudo apt install -y docker.io
+```
+
+**b)** Start and enable Docker:
+```bash
+sudo systemctl start docker
+sudo systemctl enable docker
+```
+
+**c)** Add your user to the Docker group:
+```bash
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+**d)** Verify Docker is installed:
+```bash
+docker --version
+```
+
+**e)** Run the micro-ROS agent:
+```bash
+docker run -it --rm --net=host microros/micro-ros-agent:jazzy udp4 --port 8888 -v 6
+```
+
+Once the agent is running, turn the Alvik on. You should see new packets arriving in the terminal if the WiFi credentials and IP address are correct.
+
+### Step 3: Start FactoryAGV
+
+In a **new terminal**, navigate to the project folder and run:
+```bash
 source /opt/ros/jazzy/setup.bash
 python3 FactoryAGV.py
+```
 
-Start another terminal, change the directory to the project's folder and then source ROS2 again:
+### Step 4: Start Supervisory
+
+In another **new terminal**, navigate to the project folder and run:
+```bash
 source /opt/ros/jazzy/setup.bash
 python3 Supervisory.py
+```
 
-The robot must be placed on over the blue sticker (or technically anything blue) before it can be considered in the IDLE position and thus will not accept commands. This way the start up procedure is relatively consistently such that the robot will always be on the starting sticker. The robot must be still on the sticker for two seconds before it is considered IDLE and ready to be in service. Once ready, the robot will wait until given an order from the user. In the Supervisory.py terminal, sending the command 1 D will request a delivery to the drop off location D if there is a robot available and in service. When the conditions are met, FactoryAGV.py receives the command from the supervisor and commands the robot to remain in place until it is loaded with a part. Once the part is loaded, the user sends the number 2 in the same Supervisory terminal which will in turn command the robot to begin moving along the track. The robot will continue to move along the tape until it encounters a red sticker, if the destination is D, it stops at the first red sticker but if the destination is E it will instead stop at the second red sticker. The robot will remain in place at the destination until the user sends the number 3 in the terminal which means that the robot has delivered the order to the destination and can now return to the starting location. 
+---
+
+## Usage
+
+### Startup Procedure
+
+1. Place the robot on the **blue sticker** at the starting position.
+2. The robot must remain still on the sticker for **2 seconds** before it registers as **IDLE** and is ready to accept commands.
+
+### Sending a Delivery
+
+In the Supervisory terminal:
+
+| Input | Action |
+|-------|--------|
+| `1 D` | Request delivery to drop-off location **D** (first red sticker) |
+| `1 E` | Request delivery to drop-off location **E** (second red sticker) |
+| `2`   | Confirm the part is loaded — robot begins moving |
+| `3`   | Confirm delivery complete — robot returns to start |
+
+### Delivery Flow
+
+1. **`1 D`** — FactoryAGV assigns an available robot and commands it to wait for loading.
+2. **`2`** — Robot begins following the tape toward the destination.
+3. The robot stops at the correct red sticker (first for D, second for E).
+4. **`3`** — Robot is released and returns to the blue starting sticker.
